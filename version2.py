@@ -140,7 +140,7 @@ st.title("🪙 Copernicus Dashboard")
 # =====================================================================
 # 📂 DATA LOADING — SHARED ENGINE
 # =====================================================================
-FILE_DEFAULT = "C:/Users/tanma/OneDrive/Documents/GitHub/Coin-Project/JEFile.xlsx"
+FILE_DEFAULT = "JEFile.xlsx"
 
 @st.cache_data(show_spinner=True)
 def load_data_from_upload(content_bytes: bytes, filename: str, sheet_name):
@@ -406,7 +406,7 @@ with tab_coin_usage:
     # ---------------- MOVEMENT EXCEL ----------------
     @st.cache_data(show_spinner=False)
     def load_movement_excel():
-        excel_path = "C:/Users/tanma/OneDrive/Documents/GitHub/Coin-Project/ExcelFile2.xlsx"
+        excel_path = "ExcelFile2.xlsx"
         if not os.path.exists(excel_path):
             return pd.DataFrame(), {}
 
@@ -920,7 +920,7 @@ with tab_catcount:
 
     # Load data
     cat = pd.read_excel(
-        'C:/Users/tanma/OneDrive/Documents/GitHub/Coin-Project/Catdata.xlsx'
+        'Catdata.xlsx'
     )
     m1 = cat
 
@@ -1048,7 +1048,7 @@ with tab_movement:
     if uploaded_file:
         df = load_movement_data(uploaded_file)
     else:
-        default_path = "C:/Users/tanma/OneDrive/Documents/GitHub/Coin-Project/combined_jun_sep.xlsx"
+        default_path = "combined_jun_sep.xlsx"
         if os.path.exists(default_path):
             df = load_movement_data(default_path)
         else:
@@ -1356,7 +1356,7 @@ with tab_movement:
         @st.cache_data
         def load_movement_data():
             df = pd.read_excel(
-                "C:/Users/tanma/OneDrive/Documents/GitHub/Coin-Project/combined_jun_sep.xlsx"
+                "combined_jun_sep.xlsx"
             )
             df = df[
                 ["ID", "Moves_CoinID", "Moves_StartTime",
@@ -1484,3 +1484,4 @@ with tab_movement:
 # =====================================================================
 st.markdown("---")
 st.caption("🪙 Copernicus Dashboard | Built with Streamlit")
+
