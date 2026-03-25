@@ -394,7 +394,7 @@ with tab_coin_usage:
     # ---------------- LOAD COIN CSV ----------------
     @st.cache_data(show_spinner=False)
     def load_main_csv():
-        path = "C:/Users/tanma/OneDrive/Documents/GitHub/Coin-Project/Coin_Usage_With_SuccessRates (1) (1).csv"
+        path = "Coin_Usage_With_SuccessRates.csv"
         if not os.path.exists(path):
             st.error("❌ CSV file not found.")
             st.stop()
