@@ -142,13 +142,13 @@ st.title("🪙 Copernicus Dashboard")
 # =====================================================================
 FILE_DEFAULT = "JEFile.xlsx"
 
-@st.cache_data(show_spinner=True)
+@st.cache_data(show_spinner=True, max_entries=2)
 def load_data_from_upload(content_bytes: bytes, filename: str, sheet_name):
     if filename.lower().endswith(".csv"):
         return pd.read_csv(io.StringIO(content_bytes.decode()))
     return pd.read_excel(io.BytesIO(content_bytes), sheet_name=sheet_name)
 
-@st.cache_data(show_spinner=True)
+@st.cache_data(show_spinner=True, max_entries=2)
 def load_data_from_path(path: str, sheet_name, mtime: float):
     p = Path(path)
     if p.suffix.lower() == ".csv":
@@ -213,8 +213,8 @@ if any(col not in data.columns for col in expected_cols):
     st.dataframe(data.head())
     st.stop()
 
-df = data.copy()
-file2 = data.copy()
+df = data
+file2 = df
 
 df["TimeGap_sec"] = pd.to_numeric(df["TimeGap_sec"], errors="coerce").fillna(0.0)
 df["ProblemSolved"] = coerce_bool(df["ProblemSolved"])
@@ -253,7 +253,7 @@ grouped = (
 
 overall_means = grouped[["Avg_TimeGap_sec", "Avg_TimeGap_Success", "Avg_TimeGap_Unsuccess", "Success_Rate"]].mean()
 
-file3 = df.copy()
+file3 = df
 user_timegap_status = (
     file3.groupby("UserID")["TimeGap_sec"].sum().reset_index().rename(columns={"TimeGap_sec": "Total_TimeGap_sec"})
 )
@@ -355,7 +355,7 @@ with tab_home:
 # =====================================================================
 with tab_coin_usage:
 
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(show_spinner=False, max_entries=1)
     def load_main_csv():
         path = "Coin_Usage_With_SuccessRates.csv"
         if not os.path.exists(path):
@@ -366,12 +366,16 @@ with tab_coin_usage:
         df_coin["Coin ID"] = df_coin["Coin ID"].astype(str)
         return df_coin, move_cols
 
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(show_spinner=False, max_entries=1)
     def load_movement_excel():
         excel_path = "ExcelFile2.xlsx"
         if not os.path.exists(excel_path):
             return pd.DataFrame(), {}
-        df_moves = pd.read_excel(excel_path, usecols=["ID", "Moves_CoinID"])
+        df_moves = pd.read_excel(
+            excel_path,
+            usecols=["ID", "Moves_CoinID"],
+            engine="openpyxl"
+        )
         df_moves["ID"] = df_moves["ID"].astype(str)
 
         def clean_moves(x):
@@ -514,6 +518,7 @@ with tab_distributions:
     ax.set_ylabel("Number of Users")
     apply_mpl_theme(fig)
     st.pyplot(fig)
+    plt.close(fig)
 
 with tab_users:
     from matplotlib.patches import Patch
@@ -535,6 +540,7 @@ with tab_users:
     ax.legend(handles=legend_elements, title="Status")
     apply_mpl_theme(fig)
     st.pyplot(fig)
+    plt.close(fig)
 
     st.subheader(f"Bottom {bottom_n} Users by Total_TimeGap_sec")
     bottom_users = file5.sort_values(by="Total_TimeGap_All", ascending=True).head(bottom_n)
@@ -548,6 +554,7 @@ with tab_users:
     ax.legend(handles=legend_elements, title="Status")
     apply_mpl_theme(fig)
     st.pyplot(fig)
+    plt.close(fig)
 
     st.subheader(f"Highest/Lowest Successful TimeGap (Top {top_n})")
     success_df = file5[file5["Status"] == "Success"]
@@ -564,6 +571,7 @@ with tab_users:
     axes[1].invert_yaxis()
     apply_mpl_theme(fig)
     st.pyplot(fig)
+    plt.close(fig)
 
     st.subheader(f"Highest/Lowest Unsuccessful TimeGap (Top {top_n})")
     unsuccess_df = file5[file5["Status"] == "Unsuccess"]
@@ -580,6 +588,7 @@ with tab_users:
     axes[1].invert_yaxis()
     apply_mpl_theme(fig)
     st.pyplot(fig)
+    plt.close(fig)
 
 with tab_transitions:
     st.subheader("Success vs Unsuccess Rates by CoinID_Transition")
@@ -616,6 +625,7 @@ with tab_transitions:
             fig.tight_layout()
             apply_mpl_theme(fig)
             st.pyplot(fig)
+            plt.close(fig)
 
     grouped_sorted = grouped.sort_values(by="Success_Rate", ascending=False)
     x = np.arange(len(grouped_sorted)) * 1.5
@@ -631,6 +641,7 @@ with tab_transitions:
     ax.legend()
     apply_mpl_theme(fig)
     st.pyplot(fig)
+    plt.close(fig)
 
     st.subheader("Average TimeGap: Success vs Unsuccess (sorted by Avg TimeGap)")
     grouped_time = grouped.sort_values(by="Avg_TimeGap_sec", ascending=False)
@@ -647,6 +658,7 @@ with tab_transitions:
     ax.legend()
     apply_mpl_theme(fig)
     st.pyplot(fig)
+    plt.close(fig)
 
 with tab_heatmaps:
     st.subheader("Avg Successful TimeGap_sec")
@@ -654,7 +666,7 @@ with tab_heatmaps:
     if success_matrix is None or success_matrix.empty or success_matrix.count().sum() == 0:
         st.info("No data available to render the Successful TimeGap heatmap.")
     else:
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig, ax = plt.subplots(figsize=(6, 4))
         sns.heatmap(success_matrix.fillna(0), annot=True, fmt=".2f", cmap="Greens",
                     cbar_kws={"label": "Avg Successful TimeGap_sec"}, ax=ax)
         ax.set_xlabel("To CoinID")
@@ -662,13 +674,14 @@ with tab_heatmaps:
         ax.set_title("Average Successful TimeGap_sec")
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
 
     st.subheader("Avg Unsuccessful TimeGap_sec")
     unsuccess_matrix = grouped.pivot(index="from", columns="to", values="Avg_TimeGap_Unsuccess")
     if unsuccess_matrix is None or unsuccess_matrix.empty or unsuccess_matrix.count().sum() == 0:
         st.info("No data available to render the Unsuccessful TimeGap heatmap.")
     else:
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig, ax = plt.subplots(figsize=(6, 4))
         sns.heatmap(unsuccess_matrix.fillna(0), annot=True, fmt=".2f", cmap="Reds",
                     cbar_kws={"label": "Avg Unsuccessful TimeGap_sec"}, ax=ax)
         ax.set_xlabel("To CoinID")
@@ -676,6 +689,7 @@ with tab_heatmaps:
         ax.set_title("Average Unsuccessful TimeGap_sec")
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
 
 with tab_pathids:
     st.subheader("CoinID Sequence Analysis")
@@ -714,6 +728,7 @@ with tab_pathids:
                 plt.setp(ax.get_xticklabels(), rotation=45)
                 apply_mpl_theme(fig)
                 st.pyplot(fig)
+                plt.close(fig)
 
                 fig, ax = plt.subplots(figsize=(12, 4))
                 ps_agg.loc[sel_paths, "Avg_TimeGap_sec"].plot(kind="bar", color="tab:orange", ax=ax)
@@ -723,6 +738,7 @@ with tab_pathids:
                 plt.setp(ax.get_xticklabels(), rotation=45)
                 apply_mpl_theme(fig)
                 st.pyplot(fig)
+                plt.close(fig)
 
                 sel_low = ps_agg["Avg_TimeGap_sec"].nsmallest(10).sort_values(ascending=True)
                 if len(sel_low) > 0:
@@ -734,6 +750,7 @@ with tab_pathids:
                     plt.setp(ax.get_xticklabels(), rotation=45)
                     apply_mpl_theme(fig)
                     st.pyplot(fig)
+                    plt.close(fig)
                 else:
                     st.info("No PathIDs with the lowest average time gaps to display.")
 
@@ -771,6 +788,7 @@ with tab_groups:
                 fig.tight_layout()
                 apply_mpl_theme(fig)
                 st.pyplot(fig)
+                plt.close(fig)
                 st.dataframe(summary.round(3), use_container_width=True)
 
 with tab_catcount:
@@ -817,6 +835,7 @@ with tab_catcount:
         ax.set_title(f"Correlation Heatmap ({len(selected_vars)} variables)")
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
     else:
         st.info("Please select at least 2 variables to display the correlation heatmap.")
 
@@ -829,7 +848,7 @@ with tab_movement:
     st.sidebar.header("📁 Movement Data Source")
     uploaded_mov = st.sidebar.file_uploader("Upload Movement Data (.xlsx)", type=["xlsx"])
 
-    @st.cache_data(show_spinner=True)
+    @st.cache_data(show_spinner=True, max_entries=1)
     def load_movement_data(file_path):
         try:
             return pd.read_excel(file_path)
@@ -852,7 +871,7 @@ with tab_movement:
         st.stop()
 
     # ── Process movement data ────────────────────────────────────────
-    @st.cache_data(show_spinner=True)
+    @st.cache_data(show_spinner=True, max_entries=1)
     def process_movement_data(_df):
         df_moves = _df[_df["Moves_CoinID"].notnull()].copy()
         df_moves["Moves_Time_Fixed"] = df_moves["Moves_StartTime"].astype(str).str.replace(r":(\d{3})$", r".\1", regex=True)
@@ -947,12 +966,13 @@ with tab_movement:
         ax.legend()
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
 
      # ── TAB 7: MOVEMENT VISUALIZATION ────────────────────────────────
     with mv_tab_viz:
         st.header("🎥 Coin Movement Visualization (Animated)")
 
-        @st.cache_data
+        @st.cache_data(max_entries=1)
         def load_animation_data():
             df_anim = pd.read_excel("combined_jun_sep.xlsx")
             df_anim = df_anim[["ID", "Moves_CoinID", "Moves_StartTime", "Moves_BoardID_From", "Moves_BoardID_To"]].dropna(subset=["Moves_CoinID"])
@@ -974,7 +994,7 @@ with tab_movement:
         def cell_to_xy(cell):
             return cell % 9, (cell // 9) - BASELINE_ROW
 
-        @st.cache_data
+        @st.cache_data(max_entries=1)
         def build_animation_frames(_df_id, _initial_positions):
             current_positions = _initial_positions.copy()
             frames = []
@@ -1026,6 +1046,7 @@ with tab_movement:
         ax.set_title("Most Frequently Moved Coins (All Moves)")
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
 
     # ── TAB 3: MOVE SEQUENCES ────────────────────────────────────────
     with mv_tab_seq:
@@ -1056,6 +1077,7 @@ with tab_movement:
         ax.invert_yaxis()
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
 
         st.subheader("Top 15 Most Common Coin Move Triplets")
 
@@ -1075,6 +1097,7 @@ with tab_movement:
         ax.set_title("Top 15 Most Frequent Move Triplets")
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
 
     # ── TAB 4: PARTICIPANT ANALYSIS ──────────────────────────────────
     with mv_tab_participant:
@@ -1120,6 +1143,7 @@ with tab_movement:
                          fc=color, ec=color, linewidth=2, length_includes_head=True)
             apply_mpl_theme(fig)
             st.pyplot(fig)
+            plt.close(fig)
 
             st.subheader("Detailed Moves")
             display_data = participant_data[["Moves_Timestamp", "Coin_Name", "Moves_BoardID_From", "Moves_BoardID_To"]].copy()
@@ -1165,6 +1189,7 @@ with tab_movement:
         ax.legend(handles=legend_elements, loc="lower right")
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
         st.subheader("Pattern Details")
         st.dataframe(pattern_df, use_container_width=True)
 
@@ -1186,6 +1211,7 @@ with tab_movement:
         ax.grid(axis="y", linestyle="--", alpha=0.4)
         apply_mpl_theme(fig)
         st.pyplot(fig)
+        plt.close(fig)
         st.subheader("Move Statistics by Coin")
         all_moves_list = participant_moves["Movement_Pattern"].str.split(" -> ").explode()
         coin_extract = all_moves_list.str.extract(r"Coin (\w)")
