@@ -16,6 +16,7 @@ import re
 import plotly.express as px
 import math
 import warnings
+import base64
 warnings.filterwarnings("ignore")
 
 # ---------- Streamlit Config ----------
@@ -292,9 +293,10 @@ tabs = st.tabs([
     "Home",
     "🪙 Coin Usage Analytics",
     "📊 TimeGap Analysis",
-    "📦 Movement Analysis"
+    "📦 Movement Analysis",
+    "👥 About Us"
 ])
-(tab_home, tab_coin_usage, tab_timegap, tab_movement) = tabs
+(tab_home, tab_coin_usage, tab_timegap, tab_movement, tab_about) = tabs
 
 # =====================================================================
 # 🏠 HOME TAB
@@ -914,16 +916,16 @@ with tab_movement:
 
     # ── Subtab list (8 tabs, new Pattern Analysis added last) ────────
     (
-        mv_tab_overview, mv_tab_freq, mv_tab_seq, mv_tab_participant,
-        mv_tab_common, mv_tab_success, mv_tab_viz, mv_tab_pattern
+        mv_tab_overview, mv_tab_viz, mv_tab_freq, mv_tab_seq, mv_tab_participant,
+        mv_tab_common, mv_tab_success, mv_tab_pattern
     ) = st.tabs([
         "📊 Overview",
+        "📍 Movement Visualization",
         "📈 All Moves Frequency",
         "🔄 Move Sequences",
         "👥 Participant Analysis",
         "🎲 Common Patterns",
         "🎯 Success Analysis",
-        "📍 Movement Visualization",
         "🧠 Pattern Analysis",
     ])
 
@@ -945,6 +947,73 @@ with tab_movement:
         ax.legend()
         apply_mpl_theme(fig)
         st.pyplot(fig)
+
+     # ── TAB 7: MOVEMENT VISUALIZATION ────────────────────────────────
+    with mv_tab_viz:
+        st.header("🎥 Coin Movement Visualization (Animated)")
+
+        @st.cache_data
+        def load_animation_data():
+            df_anim = pd.read_excel("combined_jun_sep.xlsx")
+            df_anim = df_anim[["ID", "Moves_CoinID", "Moves_StartTime", "Moves_BoardID_From", "Moves_BoardID_To"]].dropna(subset=["Moves_CoinID"])
+            df_anim["Moves_StartTime"] = pd.to_datetime(df_anim["Moves_StartTime"], errors="coerce")
+            return df_anim
+
+        df_anim = load_animation_data()
+        participant_ids = sorted(df_anim["ID"].unique())
+        selected_id = st.selectbox("Select Participant:", participant_ids)
+        df_id = df_anim[df_anim["ID"] == selected_id].sort_values("Moves_StartTime")
+
+        initial_positions = {
+            "A": 19, "B": 21, "C": 23, "D": 25,
+            "E": 29, "F": 31, "G": 33,
+            "H": 39, "I": 41, "J": 49
+        }
+        BASELINE_ROW = 3
+
+        def cell_to_xy(cell):
+            return cell % 9, (cell // 9) - BASELINE_ROW
+
+        @st.cache_data
+        def build_animation_frames(_df_id, _initial_positions):
+            current_positions = _initial_positions.copy()
+            frames = []
+            for coin, pos in current_positions.items():
+                x, y = cell_to_xy(pos)
+                frames.append({"frame": 0, "coin": coin, "x": x, "y": y})
+            frame_count = 1
+            for _, row in _df_id.iterrows():
+                coin = row["Moves_CoinID"]
+                dst = int(row["Moves_BoardID_To"])
+                current_positions[coin] = dst
+                for c, p in current_positions.items():
+                    x, y = cell_to_xy(p)
+                    frames.append({"frame": frame_count, "coin": c, "x": x, "y": y})
+                frame_count += 1
+            return pd.DataFrame(frames)
+
+        movement_df = build_animation_frames(df_id, initial_positions)
+        ymin = movement_df["y"].min() - 1
+        ymax = movement_df["y"].max() + 1
+        fig = px.scatter(
+            movement_df, x="x", y="y",
+            animation_frame="frame", animation_group="coin",
+            color="coin", hover_name="coin",
+            range_x=[-1, 9], range_y=[ymin, ymax],
+            size=[20] * len(movement_df),
+            title=f"Animated Coin Movement — Participant {selected_id}",
+            template=PLOTLY_TEMPLATE
+        )
+        fig.update_traces(marker=dict(size=18))
+        fig.update_layout(width=700, height=550,
+                          xaxis=dict(dtick=1, range=[-0.5, 8.5]),
+                          yaxis=dict(dtick=1, range=[ymin, ymax]))
+        fig.update_yaxes(scaleanchor="x")
+        try:
+            fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["redraw"] = False
+        except Exception:
+            pass
+        st.plotly_chart(fig, use_container_width=True)
 
     # ── TAB 2: ALL MOVES FREQUENCY ───────────────────────────────────
     with mv_tab_freq:
@@ -1124,72 +1193,7 @@ with tab_movement:
         coin_stats.columns = ["Coin", "Total Moves"]
         st.dataframe(coin_stats, use_container_width=True)
 
-    # ── TAB 7: MOVEMENT VISUALIZATION ────────────────────────────────
-    with mv_tab_viz:
-        st.header("🎥 Coin Movement Visualization (Animated)")
-
-        @st.cache_data
-        def load_animation_data():
-            df_anim = pd.read_excel("combined_jun_sep.xlsx")
-            df_anim = df_anim[["ID", "Moves_CoinID", "Moves_StartTime", "Moves_BoardID_From", "Moves_BoardID_To"]].dropna(subset=["Moves_CoinID"])
-            df_anim["Moves_StartTime"] = pd.to_datetime(df_anim["Moves_StartTime"], errors="coerce")
-            return df_anim
-
-        df_anim = load_animation_data()
-        participant_ids = sorted(df_anim["ID"].unique())
-        selected_id = st.selectbox("Select Participant:", participant_ids)
-        df_id = df_anim[df_anim["ID"] == selected_id].sort_values("Moves_StartTime")
-
-        initial_positions = {
-            "A": 19, "B": 21, "C": 23, "D": 25,
-            "E": 29, "F": 31, "G": 33,
-            "H": 39, "I": 41, "J": 49
-        }
-        BASELINE_ROW = 3
-
-        def cell_to_xy(cell):
-            return cell % 9, (cell // 9) - BASELINE_ROW
-
-        @st.cache_data
-        def build_animation_frames(_df_id, _initial_positions):
-            current_positions = _initial_positions.copy()
-            frames = []
-            for coin, pos in current_positions.items():
-                x, y = cell_to_xy(pos)
-                frames.append({"frame": 0, "coin": coin, "x": x, "y": y})
-            frame_count = 1
-            for _, row in _df_id.iterrows():
-                coin = row["Moves_CoinID"]
-                dst = int(row["Moves_BoardID_To"])
-                current_positions[coin] = dst
-                for c, p in current_positions.items():
-                    x, y = cell_to_xy(p)
-                    frames.append({"frame": frame_count, "coin": c, "x": x, "y": y})
-                frame_count += 1
-            return pd.DataFrame(frames)
-
-        movement_df = build_animation_frames(df_id, initial_positions)
-        ymin = movement_df["y"].min() - 1
-        ymax = movement_df["y"].max() + 1
-        fig = px.scatter(
-            movement_df, x="x", y="y",
-            animation_frame="frame", animation_group="coin",
-            color="coin", hover_name="coin",
-            range_x=[-1, 9], range_y=[ymin, ymax],
-            size=[20] * len(movement_df),
-            title=f"Animated Coin Movement — Participant {selected_id}",
-            template=PLOTLY_TEMPLATE
-        )
-        fig.update_traces(marker=dict(size=18))
-        fig.update_layout(width=700, height=550,
-                          xaxis=dict(dtick=1, range=[-0.5, 8.5]),
-                          yaxis=dict(dtick=1, range=[ymin, ymax]))
-        fig.update_yaxes(scaleanchor="x")
-        try:
-            fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["redraw"] = False
-        except Exception:
-            pass
-        st.plotly_chart(fig, use_container_width=True)
+   
 
     # ── TAB 8: PATTERN ANALYSIS (NEW) ────────────────────────────────
     with mv_tab_pattern:
@@ -1362,6 +1366,219 @@ with tab_movement:
             file_name="pattern_analysis_summary.csv",
             mime="text/csv"
         )
+
+
+# =====================================================================
+# 📦 ABOUT US TAB
+# =====================================================================
+with tab_about:
+    st.markdown("""
+    <style>
+    .about-main-title {
+        text-align: center;
+        font-size: 72px;
+        font-family: Georgia, serif;
+        color: #ffffff;
+        margin-top: 25px;
+        margin-bottom: 5px;
+        line-height: 1.2;
+    }
+    .about-description {
+        text-align: center;
+        width: 65%;
+        margin: auto;
+        font-size: 18px;
+        color: #ffffff;
+        font-weight: 500;
+        margin-bottom: 20px;
+        line-height: 1.5;
+    }
+    .about-section-divider {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 15px auto 15px auto;
+        width: 75%;
+    }
+    .about-section-divider .left-line,
+    .about-section-divider .right-line {
+        flex: 1;
+        height: 2px;
+        background: #8b6b52;
+        position: relative;
+    }
+    .about-section-divider .left-line::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        background: #8b6b52;
+        border-radius: 50%;
+        position: absolute;
+        left: 0;
+        top: -3px;
+    }
+    .about-section-divider .right-line::after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        background: #8b6b52;
+        border-radius: 50%;
+        position: absolute;
+        right: 0;
+        top: -3px;
+    }
+    .about-section-title {
+        padding: 0 25px;
+        font-size: 34px;
+        font-family: Georgia, serif;
+        color: #ffffff;
+        white-space: nowrap;
+    }
+    .team-card {
+        background: rgba(255, 255, 255, 0.75);
+        border-radius: 24px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+        backdrop-filter: blur(6px);
+        transition: transform 0.3s ease;
+    }
+    .team-card:hover { transform: translateY(-6px); }
+    .member-name { font-size: 18px; font-weight: 700; margin-top: 12px; color: #000000;}
+    .member-role { font-size: 15px; color: #000000; }
+    .photo-psychology {
+        width: 160px; height: 160px; border-radius: 50%;
+        margin: auto; display: flex; align-items: center;
+        justify-content: center; border: 4px solid #d8c3a5;
+        background: #f2f2f2; transition: transform 0.3s ease;
+    }
+    .photo-psychology img { width: 50px; opacity: 0.6; }
+    .team-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;  /* keeps image centered */
+    border-radius: 50%;
+    }
+    .photo-scdm {
+        width: 145px; height: 145px; border-radius: 50%;
+        margin: auto; display: flex; align-items: center;
+        justify-content: center; border: 4px solid #d8c3a5;
+        background: #f2f2f2; transition: transform 0.3s ease;
+    }
+    .photo-scdm img { width: 48px; opacity: 0.6; }
+    .team-card:hover .photo-psychology,
+    .team-card:hover .photo-scdm { transform: scale(1.07); }
+    </style>
+    """, unsafe_allow_html=True)
+ 
+    st.markdown('<div class="about-main-title">About Us</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="about-description">
+    We are a multidisciplinary group of researchers and academics working across psychology,
+    data science, and data analytics, focused on advancing research and innovation.
+    </div>
+    """, unsafe_allow_html=True)
+ 
+ 
+ 
+ 
+    # ── Helper: load local image as base64, fallback to placeholder ──
+    def get_image_base64(image_path):
+        try:
+            with open(image_path, "rb") as f:
+                data = f.read()
+            return "data:image/png;base64," + base64.b64encode(data).decode()
+        except FileNotFoundError:
+            # Return a simple grey placeholder SVG if file not found
+            svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><circle cx="50" cy="35" r="22" fill="#ccc"/><ellipse cx="50" cy="85" rx="35" ry="25" fill="#ccc"/></svg>'
+            return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+ 
+    def team_card(img_src, name, role, photo_class="photo-psychology"):
+        return f"""
+        <div class="team-card">
+            <div class="{photo_class}">
+                <img src="{img_src}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;opacity:1;">
+            </div>
+            <div class="member-name">{name}</div>
+            <div class="member-role">{role}</div>
+        </div>"""
+ 
+    # ── Psychology Team ──
+    st.markdown("""
+    <div class="about-section-divider">
+        <div class="left-line"></div>
+        <div class="about-section-title">Psychology Team</div>
+        <div class="right-line"></div>
+    </div>
+    """, unsafe_allow_html=True)
+ 
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(team_card(
+            get_image_base64("Images/Wendy.png"),
+            "Dr. Wendy Ross",
+            "Senior Lecturer in Psychology at London Metropolitan University"
+        ), unsafe_allow_html=True)
+    with col2:
+        st.markdown(team_card(
+            get_image_base64("Images/Tom.png"),
+            "Thomas Ormerod",
+            "Professor of Psychology at University of Sussex"
+        ), unsafe_allow_html=True)
+    with col3:
+        st.markdown(team_card(
+            get_image_base64("Images/George.png"),
+            "Dr. George Georgiou",
+            "Senior Lecturer in Psychology at University of Hertfordshire"
+        ), unsafe_allow_html=True)
+ 
+    # ── SCDM Team ──
+    st.markdown("""
+    <div class="about-section-divider">
+        <div class="left-line"></div>
+        <div class="about-section-title">SCDM Team</div>
+        <div class="right-line"></div>
+    </div>
+    """, unsafe_allow_html=True)
+ 
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.markdown(team_card(
+            get_image_base64("Images/Prapa.png"),
+            "Prapa Rattadilok",
+            "Head of Computer Science and Applied Computing and Reader in Computer Science",
+            "photo-scdm"
+        ), unsafe_allow_html=True)
+    with col2:
+        st.markdown(team_card(
+            get_image_base64("Images/Subeksha.png"),
+            "Dr. Subeksha Shrestha",
+            "Deputy Course Leader and Lecturer in Data Analytics at London Metropolitan University",
+            "photo-scdm"
+        ), unsafe_allow_html=True)
+    with col3:
+        st.markdown(team_card(
+            get_image_base64("Images/Arnabi.png"),
+            "Arnabi Modak",
+            "MSc in Data Analytics at London Metropolitan University",
+            "photo-scdm"
+        ), unsafe_allow_html=True)
+    with col4:
+        st.markdown(team_card(
+            get_image_base64("Images/Upendo.png"),
+            "Upendo Daudi Manya",
+            "MSc in Data Analytics at London Metropolitan University",
+            "photo-scdm"
+        ), unsafe_allow_html=True)
+    with col5:
+        st.markdown(team_card(
+            get_image_base64("Images/Chathuranga.png"),
+            "Ganegodage Chathuranga Madushan Dharmarathne",
+            "MSc in Data Analytics at London Metropolitan University",
+            "photo-scdm"
+        ), unsafe_allow_html=True)
+ 
+
 
 # =====================================================================
 # FOOTER
